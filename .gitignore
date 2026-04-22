@@ -1,0 +1,29 @@
+# claude
+.claude
+
+# Maven
+target/
+*.class
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.eclipse
+
+# Spring Boot
+*.jar
+*.war
+
+# Logs
+*.log
+logs/
+
+# SSL (민감 정보)
+truststore.jks
+
+# OS
+.DS_Store
+Thumbs.db
+
+.env
