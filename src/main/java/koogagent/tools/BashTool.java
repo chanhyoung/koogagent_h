@@ -1,6 +1,7 @@
 package koogagent.tools;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
@@ -45,6 +46,7 @@ public class BashTool implements ToolSet {
 
         try {
             ProcessBuilder builder = new ProcessBuilder("bash", "-c", command);
+            builder.directory(new File(System.getProperty("user.dir")));
             builder.redirectErrorStream(true);
 
             Process process = builder.start();
