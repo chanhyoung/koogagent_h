@@ -31,6 +31,7 @@ import io.ktor.client.engine.apache5.Apache5EngineConfig;
 import kotlin.Unit;
 import koogagent.tools.ListFileTool;
 import koogagent.tools.ReadFileTool;
+import koogagent.tools.BashTool;
 import koogagent.tools.EditFileTool;
 import org.apache.hc.client5.http.impl.nio.PoolingAsyncClientConnectionManagerBuilder;
 import org.apache.hc.client5.http.ssl.ClientTlsStrategyBuilder;
@@ -41,13 +42,20 @@ public class KoogAgentMain {
 
     Dotenv dotenv = Dotenv.configure().ignoreIfMissing().load();
     String apiKey = dotenv.get("ANTHROPIC_API_KEY");
+    boolean isSslTrustStore = dotenv.get("IS_SSL_TRUSTSTORE", "false").equalsIgnoreCase("true") ? true : false;
 
-    SSLContext sslContext = buildSslContext(
-        dotenv.get("SSL_TRUSTSTORE_PATH", "D:/sandbox/koogagent_h/truststore.jks"),
-        dotenv.get("SSL_TRUSTSTORE_PASSWORD", "changeit")
-    );
-    HttpClient ktorClient = buildKtorClient(sslContext);
-    AnthropicLLMClient client = new AnthropicLLMClient(apiKey, new AnthropicClientSettings(), ktorClient);
+    AnthropicLLMClient client = null;
+    if (isSslTrustStore) {
+      SSLContext sslContext = buildSslContext(
+          dotenv.get("SSL_TRUSTSTORE_PATH", "D:/sandbox/koogagent_h/truststore.jks"),
+          dotenv.get("SSL_TRUSTSTORE_PASSWORD", "changeit")
+      );
+      HttpClient ktorClient = buildKtorClient(sslContext);
+      client = new AnthropicLLMClient(apiKey, new AnthropicClientSettings(), ktorClient);
+    } else {
+      client = new AnthropicLLMClient(apiKey);
+    }
+
     try (MultiLLMPromptExecutor executor = new MultiLLMPromptExecutor(client)) {
 
       System.out.println("User: ");
@@ -62,6 +70,7 @@ public class KoogAgentMain {
         .tools(new ReadFileTool()) 
         .tools(new ListFileTool()) 
         .tools(new EditFileTool())
+        .tools(new BashTool())
         .build();
 
       AIAgent<String, String> agent = AIAgent.<String, String>builder()
