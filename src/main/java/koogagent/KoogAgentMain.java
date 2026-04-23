@@ -23,6 +23,9 @@ public class KoogAgentMain {
     public static void main(String[] args) throws Exception {
         Dotenv dotenv = Dotenv.configure().ignoreIfMissing().load();
         String apiKey = dotenv.get("ANTHROPIC_API_KEY");
+        if (apiKey == null || apiKey.isBlank()) {
+            throw new IllegalStateException("ANTHROPIC_API_KEY가 설정되지 않았습니다. .env 파일을 확인하세요.");
+        }
         boolean isSslTrustStore = dotenv.get("IS_SSL_TRUSTSTORE", "false").equalsIgnoreCase("true");
 
         AnthropicLLMClient client = buildClient(apiKey, isSslTrustStore, dotenv);
@@ -47,7 +50,7 @@ public class KoogAgentMain {
                     String response = agent.chat(input);
                     System.out.println("Agent: " + response);
                 } catch (Exception e) {
-                    System.out.println("오류: " + e.getMessage());
+                    System.out.println("오류: " + e);
                 }
                 System.out.println();
             }

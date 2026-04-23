@@ -18,10 +18,12 @@ public class CodingAgent implements AutoCloseable {
     private static final String SYSTEM_PROMPT = "당신은 파일을 읽고 수정하는 코딩 에이전트입니다.";
     private static final int MAX_ITERATIONS = 50;
 
+    private final AnthropicLLMClient client;
     private final MultiLLMPromptExecutor executor;
     private final ToolRegistry toolRegistry;
 
     public CodingAgent(AnthropicLLMClient client) {
+        this.client = client;
         this.executor = new MultiLLMPromptExecutor(client);
         this.toolRegistry = ToolRegistry.builder()
             .tools(new ReadFileTool())
@@ -47,5 +49,8 @@ public class CodingAgent implements AutoCloseable {
     @Override
     public void close() throws Exception {
         executor.close();
+        if (client instanceof AutoCloseable ac) {
+            ac.close();
+        }
     }
 }
