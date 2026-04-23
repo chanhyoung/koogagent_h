@@ -2,7 +2,9 @@ package koogagent;
 
 import java.io.FileInputStream;
 import java.security.KeyStore;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;     
 
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManagerFactory;
@@ -12,6 +14,7 @@ import ai.koog.prompt.executor.clients.anthropic.AnthropicClientSettings;
 import ai.koog.prompt.executor.clients.anthropic.AnthropicLLMClient;
 import ai.koog.prompt.executor.clients.anthropic.AnthropicModels;
 import ai.koog.prompt.executor.llms.MultiLLMPromptExecutor;
+import ai.koog.prompt.llm.LLModel;
 import ai.koog.prompt.message.Message.Response;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
@@ -28,6 +31,10 @@ import org.apache.hc.client5.http.ssl.ClientTlsStrategyBuilder;
 
 public class KoogAgentMain {
   public static void main(String[] args) throws Exception {
+    LLModel model = AnthropicModels.Opus_4_6;
+    var maxIteration = 10;
+    var iteration = 0;
+
     Dotenv dotenv = Dotenv.configure().ignoreIfMissing().load();
     String apiKey = dotenv.get("ANTHROPIC_API_KEY");
     // AnthropicLLMClient client = new AnthropicLLMClient(apiKey);
@@ -39,57 +46,92 @@ public class KoogAgentMain {
     HttpClient ktorClient = buildKtorClient(sslContext);
     AnthropicLLMClient client = new AnthropicLLMClient(apiKey, new AnthropicClientSettings(), ktorClient);
     try (MultiLLMPromptExecutor executor = new MultiLLMPromptExecutor(client)) {
+
+      List<Map.Entry<String, String>> conversationHistory = new ArrayList<>();  
+
       System.out.println("User: ");
       
       // 사용자에게서 직접입력을 받아서 프롬프트로 사용
-        String userPrompt = System.console().readLine();
+      String userPrompt = System.console().readLine();
 
-        // 프롬프트생성
-        String systemPrompt = """
-        # 역할
-        당신은 코딩 에이전트입니다.
+      // 프롬프트생성
+      String systemPrompt = """
+      # 역할
+      당신은 코딩 에이전트입니다.
 
-        ## 도구
-        ### 사용 가능한 도구
-        - String readFile(String filePath) : 주어진 파일 경로를 받고 파일의 내용을 읽어서 반환하는 도구입니다.
-        
-        ### 도구 사용 규칙
-        - 도구를 사용하려면 반드시 다음 JSON 형식으로 응답해야 합니다.
-          `{"tool": "readFile", "args": {"path": "파일 경로"}}`
-        - [중요]: 도구를 선택할 때 순수한 JSON 문자열로 응답해야 합니다. 코드블럭이나 다른 요소등은 포함하지 마세요.
-        - 도구가 필요하지 않은 일반 대화는 그냥 텍스트로 응답하세요.
-        """.stripIndent();
-        Prompt prompt = Prompt.builder("hello-koog")
-          .system(systemPrompt)
-          .user(userPrompt)
-          .build();
-        List<Response> responses = executor.execute(prompt, AnthropicModels.Sonnet_4_5);
+      ## 도구
+      ### 사용 가능한 도구
+      - String readFile(String filePath) : 주어진 파일 경로를 받고 파일의 내용을 읽어서 반환하는 도구입니다.
+      
+      ### 도구 사용 규칙
+      - 도구를 사용하려면 반드시 다음 JSON 형식으로 응답해야 합니다. 
+        `{"tool": "readFile", "args": {"path": "파일 경로"}}`
+      - *중요*: 응답결과는 반드시 JSON 문자열만 응답하고 다른 설명은 추가하지 말것.
+      - 도구가 필요하지 않은 일반 대화는 그냥 텍스트로 응답하세요.
+      """.stripIndent();
+      
+      while (maxIteration > iteration) {
 
-        ObjectMapper mapper = new ObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-        ToolCall toolCall = mapper.readValue(responses.getFirst().getContent(), ToolCall.class);
-        System.out.println("ToolCall : " + toolCall.tool() + ", Args: " + toolCall.args());
+        var promptBuilder = Prompt.builder("agent-loop")
+            .system(systemPrompt)
+            .user(userPrompt);
+            // 이전 대화 이력 추가
+            for (var entry : conversationHistory) {
+                promptBuilder = promptBuilder.assistant(entry.getKey())
+                                              .user(entry.getValue());
+            }
+        Prompt currentPrompt = promptBuilder.build();
 
-        // toolCall.tool()이 "readFile"이면 ReadFileTool을 사용해서 파일을 읽는다. else 알수 없는 도구라고 출력 하고 결과는 toolResult에 저장
-        Object toolResult = null;
-        if (toolCall.tool().equals("readFile")) {
-          ReadFileTool readFileTool = new ReadFileTool();
-          toolResult = readFileTool.readFile(toolCall.args().path());
+        List<Response> finalResult = executor.execute(
+          currentPrompt, 
+          model
+        );
+
+        var llmResponse = finalResult.getFirst().getContent();
+        System.out.println("121라인 : llmResponse: " + llmResponse);
+
+        ToolCall toolCall = parseToolCall(llmResponse);
+
+        if (toolCall != null) {
+          // toolCall.tool()이 "readFile"이면 ReadFileTool을 사용해서 파일을 읽는다. else 알수 없는 도구라고 출력 하고 결과는 toolResult에 저장
+          Object toolResult = null;
+          if (toolCall.tool().equals("readFile")) {
+            ReadFileTool readFileTool = new ReadFileTool();
+            toolResult = readFileTool.readFile(toolCall.args().path());
+          } else {
+            toolResult = "알 수 없는 도구입니다.";
+          }
+          conversationHistory.add(Map.entry(llmResponse, (String) toolResult));
+          iteration++;
         } else {
-          toolResult = "알 수 없는 도구입니다.";
+          System.out.println("Assistant: " + llmResponse);
+          break;
         }
+      }
+    }
+  }
 
-        Prompt secondPrompt = Prompt.builder("second-prompt")
-          .system(systemPrompt)
-          .user(userPrompt)
-          .assistant(responses.getFirst().getContent())
-          .user((String)toolResult)
-          .build();
+  private static ToolCall parseToolCall(String response) {
+    try {
+      int start = response.indexOf("{\"tool\":");
+      if (start == -1) return null;
 
-        List<Response> finalResult = executor.execute(secondPrompt, AnthropicModels.Sonnet_4_5);
+      int depth = 0;
+      int end = -1;
+      for (int i = start; i < response.length(); i++) {
+        if (response.charAt(i) == '{') depth++;
+        else if (response.charAt(i) == '}') {
+          if (--depth == 0) { end = i + 1; break; }
+        }
+      }
+      if (end == -1) return null;
 
-        System.out.println("====================================");
-        System.out.println("finalResult: " + finalResult.getFirst().getContent());
-        System.out.println("====================================");
+      String json = response.substring(start, end);
+      ObjectMapper mapper = new ObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+      return mapper.readValue(json, ToolCall.class);
+    } catch (Exception e) {
+      System.err.println(e.getMessage());
+      return null;
     }
   }
 
