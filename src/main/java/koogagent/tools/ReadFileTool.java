@@ -6,14 +6,19 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
+import ai.koog.agents.core.tools.annotations.LLMDescription;
+import ai.koog.agents.core.tools.annotations.Tool;
+import ai.koog.agents.core.tools.reflect.ToolSet;
 import koogagent.utils.ResolveFilePath;
 
-public class ReadFileTool {
+public class ReadFileTool implements ToolSet {
+  @Tool(customName = "readFile")
+  @LLMDescription("주어진 파일 경로를 받고 파일 내용을 응답하는 도구 입니다.")
   // readFile 메서드 구현
-  public String readFile(String filePath) {
+  public String readFile(@LLMDescription("읽을 파일의 경로") String filePath) {
     // 파일 경로 유효성 검사
     if (filePath == null || filePath.isBlank()) {
-      return "유효하지 않은 파일 경로입니다.";
+      return "오류: 유효하지 않은 파일 경로입니다.";
     }
     
     // 파일을 읽어서 내용을 반환하는 로직을 구현
