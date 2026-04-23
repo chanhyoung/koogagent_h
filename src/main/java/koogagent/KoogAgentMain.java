@@ -71,7 +71,7 @@ public class KoogAgentMain {
 
         var tlsStrategy = ClientTlsStrategyBuilder.create()
             .setSslContext(sslContext)
-            .build();
+            .buildAsync();
 
         var connManager = PoolingAsyncClientConnectionManagerBuilder.create()
             .setTlsStrategy(tlsStrategy)
