@@ -33,6 +33,7 @@ import koogagent.tools.ListFileTool;
 import koogagent.tools.ReadFileTool;
 import koogagent.tools.BashTool;
 import koogagent.tools.EditFileTool;
+import koogagent.tools.CodeSearchTool;
 import org.apache.hc.client5.http.impl.nio.PoolingAsyncClientConnectionManagerBuilder;
 import org.apache.hc.client5.http.ssl.ClientTlsStrategyBuilder;
 
@@ -58,7 +59,7 @@ public class KoogAgentMain {
 
     try (MultiLLMPromptExecutor executor = new MultiLLMPromptExecutor(client)) {
 
-      System.out.println("User: ");
+      System.out.print("User: ");
       
       // 사용자에게서 직접입력을 받아서 프롬프트로 사용
       String userPrompt = System.console().readLine();
@@ -71,6 +72,7 @@ public class KoogAgentMain {
         .tools(new ListFileTool()) 
         .tools(new EditFileTool())
         .tools(new BashTool())
+        .tools(new CodeSearchTool())
         .build();
 
       AIAgent<String, String> agent = AIAgent.<String, String>builder()

@@ -3,6 +3,7 @@ package koogagent.tools;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.TimeUnit;
 
 import ai.koog.agents.core.tools.annotations.LLMDescription;
@@ -12,6 +13,22 @@ import ai.koog.agents.core.tools.reflect.ToolSet;
 public class BashTool implements ToolSet {
 
     private static final int TIMEOUT_SECONDS = 120;
+    private static final int MAX_OUTPUT_LINES = 10_000;
+
+    private static final String[] DANGEROUS_PATTERNS = {
+        "rm\\s+-[^\\s]*r",
+        "rm\\s+--recursive",
+        "\\bsudo\\b",
+        "chmod\\s+[0-7]*7[0-7][0-7]",
+        ">\\s*/dev/",
+        "mkfs",
+        "dd\\s+",
+        ":\\(\\)\\{",
+        "shutdown",
+        "reboot",
+        "halt",
+        "poweroff",
+    };
 
     @Tool(customName = "bash")
     @LLMDescription("bash 명령어를 실행하고 결과를 반환하는 도구입니다.")
@@ -20,38 +37,32 @@ public class BashTool implements ToolSet {
             return "오류: 유효하지 않은 명령어입니다.";
         }
 
-        String[] dangerousPatterns = {
-            "rm\\s+-[^\\s]*r",   // rm -r, rm -rf, rm -fr 등
-            "rm\\s+--recursive", // rm --recursive
-            "\\bsudo\\b",
-            "chmod\\s+[0-7]*7[0-7][0-7]", // chmod 777, chmod 777 변형 등
-            ">\\s*/dev/",        // > /dev/sda 등 디바이스 덮어쓰기
-            "mkfs",              // 파일시스템 포맷
-            "dd\\s+",            // 디스크 복사/덮어쓰기
-            ":\\(\\)\\{",        // fork bomb: :(){
-            "shutdown",
-            "reboot",
-            "halt",
-            "poweroff",
-        };
-
-        for (String pattern : dangerousPatterns) {
+        for (String pattern : DANGEROUS_PATTERNS) {
             if (command.matches("(?s).*" + pattern + ".*")) {
                 return "오류: 위험한 명령어는 실행할 수 없습니다. (차단된 패턴: " + pattern + ")";
             }
         }
 
-        try {            
+        try {
             ProcessBuilder builder = new ProcessBuilder("bash", "-c", command);
-            builder.redirectErrorStream(true); // stderr를 stdout에 합침
+            builder.redirectErrorStream(true);
 
             Process process = builder.start();
 
             StringBuilder output = new StringBuilder();
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+            boolean truncated = false;
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
                 String line;
+                int lineCount = 0;
                 while ((line = reader.readLine()) != null) {
-                    output.append(line).append("\n");
+                    if (lineCount < MAX_OUTPUT_LINES) {
+                        output.append(line).append("\n");
+                        lineCount++;
+                    } else {
+                        truncated = true;
+                        process.destroyForcibly();
+                        break;
+                    }
                 }
             }
 
@@ -62,7 +73,8 @@ public class BashTool implements ToolSet {
             }
 
             int exitCode = process.exitValue();
-            return "exit code: " + exitCode + "\n" + output;
+            String suffix = truncated ? "\n[출력이 " + MAX_OUTPUT_LINES + "줄을 초과하여 잘렸습니다.]" : "";
+            return "exit code: " + exitCode + "\n" + output + suffix;
 
         } catch (IOException e) {
             return "오류: 명령어 실행 중 IO 오류가 발생했습니다: " + e.getMessage();
