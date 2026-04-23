@@ -23,9 +23,43 @@
         <kotlin.version>2.1.20</kotlin.version>
     </properties>
 
-    <!-- kotlinx-serialization 버전 충돌 해소 (1.6.3 vs 1.8.1) -->
+    <!-- 버전 충돌 해소 -->
     <dependencyManagement>
         <dependencies>
+            <!-- org.jetbrains:annotations 버전 통일 (13.0 vs 23.0.0 vs 26.0.2-1) -->
+            <dependency>
+                <groupId>org.jetbrains</groupId>
+                <artifactId>annotations</artifactId>
+                <version>26.0.2-1</version>
+            </dependency>
+
+            <!-- kotlin-logging-jvm 버전 통일 (7.0.7 vs 7.0.13 vs 8.0.01) -->
+            <dependency>
+                <groupId>io.github.oshai</groupId>
+                <artifactId>kotlin-logging-jvm</artifactId>
+                <version>8.0.01</version>
+            </dependency>
+
+            <!-- kotlinx-io 버전 통일 (0.6.0 vs 0.7.0 vs 0.8.2) -->
+            <dependency>
+                <groupId>org.jetbrains.kotlinx</groupId>
+                <artifactId>kotlinx-io-core-jvm</artifactId>
+                <version>0.8.2</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jetbrains.kotlinx</groupId>
+                <artifactId>kotlinx-io-bytestring-jvm</artifactId>
+                <version>0.8.2</version>
+            </dependency>
+
+            <!-- ktor 버전 통일 (3.2.2 vs 3.2.3) -->
+            <dependency>
+                <groupId>io.ktor</groupId>
+                <artifactId>ktor-bom</artifactId>
+                <version>3.2.3</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
             <dependency>
                 <groupId>org.jetbrains.kotlinx</groupId>
                 <artifactId>kotlinx-serialization-core-jvm</artifactId>
@@ -83,13 +117,6 @@
             <version>3.0.0</version>
         </dependency>
 
-        <!-- dotenv: .env 파일 로드 -->
-        <dependency>
-            <groupId>io.github.cdimascio</groupId>
-            <artifactId>dotenv-java</artifactId>
-            <version>3.0.0</version>
-        </dependency>
-
         <!-- Test -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -116,8 +143,7 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
-                    <source>${java.version}</source>
-                    <target>${java.version}</target>
+                    <release>${java.version}</release>
                     <annotationProcessorPaths>
                         <path>
                             <groupId>org.projectlombok</groupId>

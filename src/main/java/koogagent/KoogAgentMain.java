@@ -1,8 +1,14 @@
 package koogagent;
 
+import java.io.FileInputStream;
+import java.security.KeyStore;
 import java.util.List;
 
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManagerFactory;
+
 import ai.koog.prompt.dsl.Prompt;
+import ai.koog.prompt.executor.clients.anthropic.AnthropicClientSettings;
 import ai.koog.prompt.executor.clients.anthropic.AnthropicLLMClient;
 import ai.koog.prompt.executor.clients.anthropic.AnthropicModels;
 import ai.koog.prompt.executor.llms.MultiLLMPromptExecutor;
@@ -11,12 +17,27 @@ import ai.koog.prompt.message.Message.Response;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.cdimascio.dotenv.Dotenv;
+import io.ktor.client.HttpClient;
+import io.ktor.client.HttpClientConfig;
+import io.ktor.client.engine.apache5.Apache5Engine;
+import io.ktor.client.engine.apache5.Apache5EngineConfig;
+import kotlin.Unit;
 import koogagent.tools.ReadFileTool;
+import org.apache.hc.client5.http.impl.nio.PoolingAsyncClientConnectionManagerBuilder;
+import org.apache.hc.client5.http.ssl.ClientTlsStrategyBuilder;
 
 public class KoogAgentMain {
   public static void main(String[] args) throws Exception {
-    String apiKey = getDotenvApiKey();
-    AnthropicLLMClient client = new AnthropicLLMClient(apiKey);
+    Dotenv dotenv = Dotenv.configure().ignoreIfMissing().load();
+    String apiKey = dotenv.get("ANTHROPIC_API_KEY");
+    // AnthropicLLMClient client = new AnthropicLLMClient(apiKey);
+
+    SSLContext sslContext = buildSslContext(
+        dotenv.get("SSL_TRUSTSTORE_PATH", "D:/sandbox/koogagent_h/truststore.jks"),
+        dotenv.get("SSL_TRUSTSTORE_PASSWORD", "changeit")
+    );
+    HttpClient ktorClient = buildKtorClient(sslContext);
+    AnthropicLLMClient client = new AnthropicLLMClient(apiKey, new AnthropicClientSettings(), ktorClient);
     try (MultiLLMPromptExecutor executor = new MultiLLMPromptExecutor(client)) {
       System.out.println("User: ");
       
@@ -42,7 +63,7 @@ public class KoogAgentMain {
           .system(systemPrompt)
           .user(userPrompt)
           .build();
-        List<Response> responses = executor.execute(prompt, AnthropicModels.Opus_4_6);
+        List<Response> responses = executor.execute(prompt, AnthropicModels.Sonnet_4_5);
 
         ObjectMapper mapper = new ObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
         ToolCall toolCall = mapper.readValue(responses.getFirst().getContent(), ToolCall.class);
@@ -64,7 +85,7 @@ public class KoogAgentMain {
           .user((String)toolResult)
           .build();
 
-        List<Response> finalResult = executor.execute(secondPrompt, AnthropicModels.Opus_4_6);
+        List<Response> finalResult = executor.execute(secondPrompt, AnthropicModels.Sonnet_4_5);
 
         System.out.println("====================================");
         System.out.println("finalResult: " + finalResult.getFirst().getContent());
@@ -76,11 +97,34 @@ public class KoogAgentMain {
 
   record ToolArgs(String path) {}
 
-  private static String getDotenvApiKey() {
-      Dotenv dotenv = Dotenv.configure()
-              .directory("./")
-              .ignoreIfMissing()
-              .load();
-      return dotenv.get("ANTHROPIC_API_KEY");
+  private static HttpClient buildKtorClient(SSLContext sslContext) {
+      Apache5EngineConfig engineConfig = new Apache5EngineConfig();
+
+      var tlsStrategy = ClientTlsStrategyBuilder.create()
+              .setSslContext(sslContext)
+              .build();
+
+      var connManager = PoolingAsyncClientConnectionManagerBuilder.create()
+              .setTlsStrategy(tlsStrategy)
+              .build();
+
+      engineConfig.customizeClient(builder -> {
+          builder.setConnectionManager(connManager);
+          return Unit.INSTANCE;
+      });
+
+      return new HttpClient(new Apache5Engine(engineConfig), new HttpClientConfig<>());
+  }
+
+  private static SSLContext buildSslContext(String trustStorePath, String trustStorePassword) throws Exception {
+      KeyStore keyStore = KeyStore.getInstance(KeyStore.getDefaultType());
+      try (FileInputStream fis = new FileInputStream(trustStorePath)) {
+          keyStore.load(fis, trustStorePassword.toCharArray());
+      }
+      TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+      tmf.init(keyStore);
+      SSLContext sslContext = SSLContext.getInstance("TLS");
+      sslContext.init(null, tmf.getTrustManagers(), null);
+      return sslContext;
   }
 }
