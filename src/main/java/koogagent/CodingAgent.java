@@ -14,6 +14,7 @@ import koogagent.tools.CodeSearchTool;
 import koogagent.tools.EditFileTool;
 import koogagent.tools.ListFileTool;
 import koogagent.tools.ReadFileTool;
+import koogagent.utils.MessageFormatter;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
@@ -28,7 +29,6 @@ public class CodingAgent implements AutoCloseable {
     static final String SYSTEM_PROMPT = "당신은 파일을 읽고 수정하는 코딩 에이전트입니다.";
     private static final int MAX_ITERATIONS = 50;
 
-    private final AnthropicLLMClient client;
     private final MultiLLMPromptExecutor executor;
     private final ToolRegistry toolRegistry;
     private final ConversationHistoryStorage conversationHistoryStorage;
@@ -38,7 +38,6 @@ public class CodingAgent implements AutoCloseable {
     }
 
     public CodingAgent(AnthropicLLMClient client, String bashPath, String projectDir, String sessionId) throws IOException {
-        this.client = client;
         this.executor = new MultiLLMPromptExecutor(client);
         this.toolRegistry = ToolRegistry.builder()
             .tools(new ReadFileTool())
@@ -53,8 +52,11 @@ public class CodingAgent implements AutoCloseable {
     }
 
     public String chat(String userMessage) throws Exception {
+        conversationHistoryStorage.compressHistory(executor, MODEL);
+
         List<Message> history = conversationHistoryStorage.getHistory();
-        String system = buildSystemPromptWithHistory(history);
+        String summary = conversationHistoryStorage.getSummary();
+        String system = buildSystemPromptWithHistory(history, summary);
 
         AIAgent<String, String> agent = AIAgent.builder()
             .promptExecutor(executor)
@@ -70,19 +72,21 @@ public class CodingAgent implements AutoCloseable {
         return response;
     }
 
-    static String buildSystemPromptWithHistory(List<Message> history) {
-        if (history.isEmpty()) return SYSTEM_PROMPT;
+    static String buildSystemPromptWithHistory(List<Message> history, String summary) {
+        if (summary == null && history.isEmpty()) return SYSTEM_PROMPT;
+
         StringBuilder sb = new StringBuilder();
-        sb.append("# System Prompt\n").append(SYSTEM_PROMPT).append("\n\n");
-        sb.append("# Conversation History\n");
-        for (Message msg : history) {
-            if (msg instanceof Message.User u) {
-                sb.append("User: ").append(u.getContent()).append("\n");
-            } else if (msg instanceof Message.Assistant a) {
-                sb.append("Assistant: ").append(a.getContent()).append("\n");
-            }
+        sb.append(SYSTEM_PROMPT);
+
+        if (summary != null) {
+            sb.append("\n\n# Previous Conversation Summary\n").append(summary);
         }
-        sb.append("\n위의 맥락을 바탕으로 대화를 이어가 주세요.\n");
+
+        if (!history.isEmpty()) {
+            sb.append("\n\n# Recent Conversation\n");
+            MessageFormatter.appendMessages(sb, history);
+        }
+
         return sb.toString();
     }
 

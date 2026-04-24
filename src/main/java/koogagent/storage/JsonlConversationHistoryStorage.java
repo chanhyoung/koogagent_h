@@ -1,12 +1,16 @@
 package koogagent.storage;
 
+import ai.koog.agents.core.agent.AIAgent;
+import ai.koog.agents.core.tools.ToolRegistry;
+import ai.koog.prompt.executor.llms.MultiLLMPromptExecutor;
+import ai.koog.prompt.llm.LLModel;
 import ai.koog.prompt.message.Message;
 import ai.koog.prompt.message.RequestMetaInfo;
 import ai.koog.prompt.message.ResponseMetaInfo;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import java.util.ArrayList;
+import koogagent.utils.MessageFormatter;
 import kotlin.Unit;
 import kotlinx.serialization.KSerializer;
 import kotlinx.serialization.json.Json;
@@ -14,6 +18,7 @@ import kotlinx.serialization.json.JsonKt;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -21,7 +26,12 @@ import java.util.List;
 
 public class JsonlConversationHistoryStorage implements ConversationHistoryStorage {
 
+    private static final int COMPRESS_THRESHOLD = 10;
+    private static final int KEEP_RECENT = 4;
+
     private final Path historyFile;
+    private final Path summaryFile;
+    private int cachedMessageCount = -1; // -1 = not yet loaded; avoids file read on each chat hot-path
     private final Json json;
     private final ObjectMapper mapper;
 
@@ -36,6 +46,7 @@ public class JsonlConversationHistoryStorage implements ConversationHistoryStora
     public JsonlConversationHistoryStorage(Path sessionDir) throws IOException {
         Files.createDirectories(sessionDir);
         this.historyFile = sessionDir.resolve("session.jsonl");
+        this.summaryFile = sessionDir.resolve("summary.md");
         this.json = JsonKt.Json(Json.Default, cfg -> {
             cfg.setIgnoreUnknownKeys(true);
             return Unit.INSTANCE;
@@ -58,10 +69,72 @@ public class JsonlConversationHistoryStorage implements ConversationHistoryStora
             : existing + "\n" + userLine + "\n" + assistantLine;
 
         Files.writeString(historyFile, newContent);
+        if (cachedMessageCount >= 0) cachedMessageCount += 2;
     }
 
     @Override
     public List<Message> getHistory() throws IOException {
+        List<Message> all = loadAllMessages();
+        if (all.size() <= KEEP_RECENT) return all;
+        return all.subList(all.size() - KEEP_RECENT, all.size());
+    }
+
+    @Override
+    public String getSummary() throws IOException {
+        try {
+            String content = Files.readString(summaryFile).strip();
+            return content.isBlank() ? null : content;
+        } catch (NoSuchFileException e) {
+            return null;
+        }
+    }
+
+    @Override
+    public void compressHistory(MultiLLMPromptExecutor executor, LLModel model) throws Exception {
+        if (cachedMessageCount() <= COMPRESS_THRESHOLD) return;
+
+        List<Message> all = loadAllMessages();
+        if (all.size() <= COMPRESS_THRESHOLD) return;
+
+        List<Message> toSummarize = all.subList(0, all.size() - KEEP_RECENT);
+
+        StringBuilder conversationText = new StringBuilder();
+        String existing = getSummary();
+        if (existing != null) {
+            conversationText.append("이전 요약: ").append(existing).append("\n\n");
+        }
+        MessageFormatter.appendMessages(conversationText, toSummarize);
+
+        String summary = callSummarizeLLM(conversationText.toString(), executor, model);
+        Files.writeString(summaryFile, summary);
+        cachedMessageCount = KEEP_RECENT;
+    }
+
+    private int cachedMessageCount() throws IOException {
+        if (cachedMessageCount < 0) {
+            if (!Files.exists(historyFile)) {
+                cachedMessageCount = 0;
+            } else {
+                try (var lines = Files.lines(historyFile)) {
+                    cachedMessageCount = (int) lines.filter(l -> !l.isBlank()).count();
+                }
+            }
+        }
+        return cachedMessageCount;
+    }
+
+    protected String callSummarizeLLM(String conversationText, MultiLLMPromptExecutor executor, LLModel model) throws Exception {
+        AIAgent<String, String> agent = AIAgent.builder()
+            .promptExecutor(executor)
+            .llmModel(model)
+            .systemPrompt(conversationText)
+            .toolRegistry(ToolRegistry.builder().build())
+            .maxIterations(1)
+            .build();
+        return agent.run("이 대화를 간결하게 요약해주세요. 핵심 정보만 간결하게 작성하세요.");
+    }
+
+    private List<Message> loadAllMessages() throws IOException {
         if (!Files.exists(historyFile)) return List.of();
 
         List<Message> messages = new ArrayList<>();

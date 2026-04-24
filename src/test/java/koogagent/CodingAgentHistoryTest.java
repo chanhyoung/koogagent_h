@@ -5,7 +5,6 @@ import ai.koog.prompt.message.Message;
 import ai.koog.prompt.message.RequestMetaInfo;
 import ai.koog.prompt.message.ResponseMetaInfo;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mockito;
 
 import java.io.IOException;
@@ -17,39 +16,60 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class CodingAgentHistoryTest {
 
-    @TempDir
-    Path tempDir;
+    private static Message.User user(String content) {
+        return new Message.User(content, RequestMetaInfo.Companion.getEmpty());
+    }
 
-    @Test
-    void buildSystemPromptWithHistory_returnsBasePromptWhenEmpty() {
-        String result = CodingAgent.buildSystemPromptWithHistory(List.of());
-
-        assertThat(result).isEqualTo("당신은 파일을 읽고 수정하는 코딩 에이전트입니다.");
+    private static Message.Assistant assistant(String content) {
+        return new Message.Assistant(content, ResponseMetaInfo.Companion.getEmpty(), null, null);
     }
 
     @Test
-    void buildSystemPromptWithHistory_includesHistoryWhenPresent() {
-        Message.User user = new Message.User("파일 읽어줘", RequestMetaInfo.Companion.getEmpty());
-        Message.Assistant asst = new Message.Assistant(
-            "파일 내용입니다", ResponseMetaInfo.Companion.getEmpty(), null, null);
+    void buildSystemPromptWithHistory_noHistoryNoSummary() {
+        String result = CodingAgent.buildSystemPromptWithHistory(List.of(), null);
 
-        String result = CodingAgent.buildSystemPromptWithHistory(List.of(user, asst));
+        assertThat(result).isEqualTo(CodingAgent.SYSTEM_PROMPT);
+    }
 
-        assertThat(result).contains("# System Prompt");
-        assertThat(result).contains("# Conversation History");
-        assertThat(result).contains("User: 파일 읽어줘");
-        assertThat(result).contains("Assistant: 파일 내용입니다");
-        assertThat(result).contains("위의 맥락을 바탕으로 대화를 이어가 주세요.");
+    @Test
+    void buildSystemPromptWithHistory_withSummaryOnly() {
+        String result = CodingAgent.buildSystemPromptWithHistory(List.of(), "이전 대화 요약");
+
+        assertThat(result).contains("# Previous Conversation Summary");
+        assertThat(result).contains("이전 대화 요약");
+        assertThat(result).doesNotContain("# Recent Conversation");
+    }
+
+    @Test
+    void buildSystemPromptWithHistory_withHistoryOnly() {
+        String result = CodingAgent.buildSystemPromptWithHistory(
+            List.of(user("질문"), assistant("답변")), null);
+
+        assertThat(result).contains("# Recent Conversation");
+        assertThat(result).contains("User: 질문");
+        assertThat(result).contains("Assistant: 답변");
+        assertThat(result).doesNotContain("# Previous Conversation Summary");
+    }
+
+    @Test
+    void buildSystemPromptWithHistory_withBoth_summaryBeforeHistory() {
+        String result = CodingAgent.buildSystemPromptWithHistory(
+            List.of(user("최근 질문"), assistant("최근 답변")), "요약 내용");
+
+        assertThat(result).contains("# Previous Conversation Summary");
+        assertThat(result).contains("요약 내용");
+        assertThat(result).contains("# Recent Conversation");
+        assertThat(result).contains("User: 최근 질문");
+        assertThat(result.indexOf("# Previous Conversation Summary"))
+            .isLessThan(result.indexOf("# Recent Conversation"));
     }
 
     @Test
     void constructor_createsStorageDirectory() throws Exception {
         AnthropicLLMClient mockClient = Mockito.mock(AnthropicLLMClient.class);
-        String projectDir = "test-project";
-        String sessionId = "test-session";
 
-        try (var agent = new CodingAgent(mockClient, "bash", projectDir, sessionId)) {
-            Path expectedDir = Path.of(".koogagent/projects/" + projectDir + "/" + sessionId);
+        try (var agent = new CodingAgent(mockClient, "bash", "test-project", "test-session")) {
+            Path expectedDir = Path.of(".koogagent/projects/test-project/test-session");
             assertThat(Files.exists(expectedDir)).isTrue();
             deleteRecursively(Path.of(".koogagent"));
         }
@@ -62,7 +82,6 @@ class CodingAgentHistoryTest {
         CodingAgent agent = new CodingAgent(mockClient, "bash", "test-close", "session-close");
         agent.close();
 
-        // executor.close()가 클라이언트를 닫으므로 정확히 1회여야 함 (명시적 호출로 2회가 되면 안 됨)
         Mockito.verify(mockClient, Mockito.times(1)).close();
 
         deleteRecursively(Path.of(".koogagent/projects/test-close"));
