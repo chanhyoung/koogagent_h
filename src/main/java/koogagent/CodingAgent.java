@@ -53,15 +53,21 @@ public class CodingAgent implements AutoCloseable {
     }
 
     public String chat(String userMessage) throws Exception {
+        List<Message> history = conversationHistoryStorage.getHistory();
+        String system = buildSystemPromptWithHistory(history);
+
         AIAgent<String, String> agent = AIAgent.builder()
             .promptExecutor(executor)
             .llmModel(MODEL)
-            .systemPrompt(SYSTEM_PROMPT)
+            .systemPrompt(system)
             .temperature(0.3)
             .toolRegistry(toolRegistry)
             .maxIterations(MAX_ITERATIONS)
             .build();
-        return agent.run(userMessage);
+
+        String response = agent.run(userMessage);
+        conversationHistoryStorage.addConversation(userMessage, response);
+        return response;
     }
 
     static String buildSystemPromptWithHistory(List<Message> history) {
