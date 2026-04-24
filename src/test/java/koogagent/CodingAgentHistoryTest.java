@@ -55,6 +55,19 @@ class CodingAgentHistoryTest {
         }
     }
 
+    @Test
+    void close_closesClientExactlyOnce() throws Exception {
+        AnthropicLLMClient mockClient = Mockito.mock(AnthropicLLMClient.class);
+
+        CodingAgent agent = new CodingAgent(mockClient, "bash", "test-close", "session-close");
+        agent.close();
+
+        // executor.close()가 클라이언트를 닫으므로 정확히 1회여야 함 (명시적 호출로 2회가 되면 안 됨)
+        Mockito.verify(mockClient, Mockito.times(1)).close();
+
+        deleteRecursively(Path.of(".koogagent/projects/test-close"));
+    }
+
     private void deleteRecursively(Path path) throws IOException {
         if (!Files.exists(path)) return;
         try (var walk = Files.walk(path)) {

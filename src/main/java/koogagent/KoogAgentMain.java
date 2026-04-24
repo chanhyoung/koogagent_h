@@ -1,6 +1,9 @@
 package koogagent;
 
 import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.PrintStream;
 import java.security.KeyStore;
 import java.util.Scanner;
 
@@ -20,6 +23,11 @@ import org.apache.hc.client5.http.ssl.ClientTlsStrategyBuilder;
 
 public class KoogAgentMain {
 
+    @FunctionalInterface
+    interface AgentFactory {
+        CodingAgent create() throws Exception;
+    }
+
     public static void main(String[] args) throws Exception {
         Dotenv dotenv = Dotenv.configure().ignoreIfMissing().load();
         String apiKey = dotenv.get("ANTHROPIC_API_KEY");
@@ -29,32 +37,47 @@ public class KoogAgentMain {
         boolean isSslTrustStore = dotenv.get("IS_SSL_TRUSTSTORE", "false").equalsIgnoreCase("true");
         String bashPath = dotenv.get("BASH_PATH", "bash");
 
-        AnthropicLLMClient client = buildClient(apiKey, isSslTrustStore, dotenv);
+        runLoop(System.in, System.out, () -> new CodingAgent(buildClient(apiKey, isSslTrustStore, dotenv), bashPath));
+    }
 
-        try (CodingAgent agent = new CodingAgent(client, bashPath)) {
-            System.out.println("Coding Agent가 시작되었습니다. 종료하려면 'exit'을 입력하세요.");
-            System.out.println();
+    static void runLoop(InputStream in, PrintStream out, AgentFactory factory) throws Exception {
+        CodingAgent agent = factory.create();
+        try {
+            out.println("Coding Agent가 시작되었습니다.");
+            out.println("명령어: /clear (새 대화 시작), exit (종료)");
+            out.println();
 
-            Scanner scanner = new Scanner(System.in);
+            Scanner scanner = new Scanner(in);
             while (true) {
-                System.out.print("User: ");
+                out.print("User: ");
                 if (!scanner.hasNextLine()) break;
                 String input = scanner.nextLine().trim();
 
                 if (input.isEmpty()) continue;
+
                 if (input.equalsIgnoreCase("exit")) {
-                    System.out.println("종료합니다.");
+                    out.println("종료합니다.");
                     break;
+                }
+
+                if (input.equals("/clear")) {
+                    agent.close();
+                    agent = factory.create();
+                    out.println("새로운 대화가 시작되었습니다.");
+                    out.println();
+                    continue;
                 }
 
                 try {
                     String response = agent.chat(input);
-                    System.out.println("Agent: " + response);
+                    out.println("Agent: " + response);
                 } catch (Exception e) {
-                    System.out.println("오류: " + e);
+                    out.println("오류: " + e);
                 }
-                System.out.println();
+                out.println();
             }
+        } finally {
+            agent.close();
         }
     }
 

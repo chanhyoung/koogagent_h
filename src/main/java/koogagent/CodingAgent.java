@@ -89,8 +89,5 @@ public class CodingAgent implements AutoCloseable {
     @Override
     public void close() throws Exception {
         executor.close();
-        if (client instanceof AutoCloseable ac) {
-            ac.close();
-        }
     }
 }

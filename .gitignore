@@ -27,3 +27,5 @@ truststore.jks
 Thumbs.db
 
 .env
+.koogagent
+*.pdf
