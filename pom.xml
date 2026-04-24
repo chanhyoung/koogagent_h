@@ -63,22 +63,22 @@
             <dependency>
                 <groupId>org.jetbrains.kotlinx</groupId>
                 <artifactId>kotlinx-serialization-core-jvm</artifactId>
-                <version>1.8.1</version>
+                <version>1.10.0</version>
             </dependency>
             <dependency>
                 <groupId>org.jetbrains.kotlinx</groupId>
                 <artifactId>kotlinx-serialization-json-jvm</artifactId>
-                <version>1.8.1</version>
+                <version>1.10.0</version>
             </dependency>
             <dependency>
                 <groupId>org.jetbrains.kotlinx</groupId>
                 <artifactId>kotlinx-serialization-core</artifactId>
-                <version>1.8.1</version>
+                <version>1.10.0</version>
             </dependency>
             <dependency>
                 <groupId>org.jetbrains.kotlinx</groupId>
                 <artifactId>kotlinx-serialization-json</artifactId>
-                <version>1.8.1</version>
+                <version>1.10.0</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
@@ -108,6 +108,13 @@
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
             <optional>true</optional>
+        </dependency>
+
+        <!-- kotlinx-datetime: kotlin.time.Instant 직렬화 지원 -->
+        <dependency>
+            <groupId>org.jetbrains.kotlinx</groupId>
+            <artifactId>kotlinx-datetime-jvm</artifactId>
+            <version>0.7.1</version>
         </dependency>
 
         <!-- dotenv: .env 파일 로드 -->

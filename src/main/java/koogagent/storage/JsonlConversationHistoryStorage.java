@@ -1,6 +1,8 @@
 package koogagent.storage;
 
 import ai.koog.prompt.message.Message;
+import ai.koog.prompt.message.RequestMetaInfo;
+import ai.koog.prompt.message.ResponseMetaInfo;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -42,11 +44,31 @@ public class JsonlConversationHistoryStorage implements ConversationHistoryStora
 
     @Override
     public void addConversation(String userMessage, String assistantMessage) throws IOException {
-        throw new UnsupportedOperationException("미구현");
+        Message.User user = new Message.User(userMessage, RequestMetaInfo.Companion.getEmpty());
+        Message.Assistant assistant = new Message.Assistant(
+            assistantMessage, ResponseMetaInfo.Companion.getEmpty(), null, null);
+
+        String userLine = buildLine("user", json.encodeToString(USER_SERIALIZER, user));
+        String assistantLine = buildLine("assistant", json.encodeToString(ASSISTANT_SERIALIZER, assistant));
+
+        String existing = Files.exists(historyFile) ? Files.readString(historyFile) : "";
+        String newContent = existing.isEmpty()
+            ? userLine + "\n" + assistantLine
+            : existing + "\n" + userLine + "\n" + assistantLine;
+
+        Files.writeString(historyFile, newContent);
     }
 
     @Override
     public List<Message> getHistory() throws IOException {
         throw new UnsupportedOperationException("미구현");
+    }
+
+    private String buildLine(String type, String dataJson) throws IOException {
+        ObjectNode node = mapper.createObjectNode();
+        node.put("timestamp", Instant.now().toString());
+        node.put("type", type);
+        node.set("data", mapper.readTree(dataJson));
+        return mapper.writeValueAsString(node);
     }
 }
