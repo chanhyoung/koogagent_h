@@ -8,12 +8,15 @@ import ai.koog.prompt.executor.clients.anthropic.AnthropicLLMClient;
 import ai.koog.prompt.executor.clients.anthropic.AnthropicModels;
 import ai.koog.prompt.executor.llms.MultiLLMPromptExecutor;
 import ai.koog.prompt.llm.LLModel;
+import ai.koog.prompt.message.Message;
 import koogagent.tools.BashTool;
 import koogagent.tools.CodeSearchTool;
 import koogagent.tools.EditFileTool;
 import koogagent.tools.ListFileTool;
 import koogagent.tools.ReadFileTool;
 import lombok.extern.slf4j.Slf4j;
+
+import java.util.List;
 
 @Slf4j
 public class CodingAgent implements AutoCloseable {
@@ -58,6 +61,22 @@ public class CodingAgent implements AutoCloseable {
             // })
             .build();
         return agent.run(userMessage);
+    }
+
+    static String buildSystemPromptWithHistory(List<Message> history) {
+        if (history.isEmpty()) return SYSTEM_PROMPT;
+        StringBuilder sb = new StringBuilder();
+        sb.append("# System Prompt\n").append(SYSTEM_PROMPT).append("\n\n");
+        sb.append("# Conversation History\n");
+        for (Message msg : history) {
+            if (msg instanceof Message.User u) {
+                sb.append("User: ").append(u.getContent()).append("\n");
+            } else if (msg instanceof Message.Assistant a) {
+                sb.append("Assistant: ").append(a.getContent()).append("\n");
+            }
+        }
+        sb.append("\n위의 맥락을 바탕으로 대화를 이어가 주세요.\n");
+        return sb.toString();
     }
 
     @Override
