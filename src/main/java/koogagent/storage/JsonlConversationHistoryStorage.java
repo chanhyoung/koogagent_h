@@ -6,6 +6,7 @@ import ai.koog.prompt.message.ResponseMetaInfo;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.util.ArrayList;
 import kotlin.Unit;
 import kotlinx.serialization.KSerializer;
 import kotlinx.serialization.json.Json;
@@ -61,7 +62,26 @@ public class JsonlConversationHistoryStorage implements ConversationHistoryStora
 
     @Override
     public List<Message> getHistory() throws IOException {
-        throw new UnsupportedOperationException("미구현");
+        if (!Files.exists(historyFile)) return List.of();
+
+        List<Message> messages = new ArrayList<>();
+        for (String line : Files.readAllLines(historyFile)) {
+            if (line.isBlank()) continue;
+            try {
+                JsonNode node = mapper.readTree(line);
+                String type = node.get("type").asText();
+                String dataJson = mapper.writeValueAsString(node.get("data"));
+                Message msg = switch (type) {
+                    case "user" -> json.decodeFromString(USER_SERIALIZER, dataJson);
+                    case "assistant" -> json.decodeFromString(ASSISTANT_SERIALIZER, dataJson);
+                    default -> throw new IllegalArgumentException("알 수 없는 타입: " + type);
+                };
+                messages.add(msg);
+            } catch (Exception e) {
+                System.err.println("해당 줄을 구문 분석하는 데 실패했습니다: " + line);
+            }
+        }
+        return messages;
     }
 
     private String buildLine(String type, String dataJson) throws IOException {

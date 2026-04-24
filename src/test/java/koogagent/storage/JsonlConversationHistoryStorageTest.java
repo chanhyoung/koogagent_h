@@ -1,5 +1,6 @@
 package koogagent.storage;
 
+import ai.koog.prompt.message.Message;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -51,5 +52,41 @@ class JsonlConversationHistoryStorageTest {
         var lines = Files.readAllLines(historyFile).stream()
             .filter(l -> !l.isBlank()).toList();
         assertThat(lines).hasSize(4);
+    }
+
+    @Test
+    void getHistory_returnsEmptyWhenNoFile() throws IOException {
+        Path sessionDir = tempDir.resolve("session4");
+        var storage = new JsonlConversationHistoryStorage(sessionDir);
+
+        assertThat(storage.getHistory()).isEmpty();
+    }
+
+    @Test
+    void getHistory_returnsMessagesInOrder() throws IOException {
+        Path sessionDir = tempDir.resolve("session5");
+        var storage = new JsonlConversationHistoryStorage(sessionDir);
+        storage.addConversation("첫 질문", "첫 답변");
+
+        var history = storage.getHistory();
+
+        assertThat(history).hasSize(2);
+        assertThat(history.get(0)).isInstanceOf(Message.User.class);
+        assertThat(history.get(0).getContent()).isEqualTo("첫 질문");
+        assertThat(history.get(1)).isInstanceOf(Message.Assistant.class);
+        assertThat(history.get(1).getContent()).isEqualTo("첫 답변");
+    }
+
+    @Test
+    void getHistory_skipsMalformedLines() throws IOException {
+        Path sessionDir = tempDir.resolve("session6");
+        var storage = new JsonlConversationHistoryStorage(sessionDir);
+        storage.addConversation("정상", "메시지");
+        Files.writeString(sessionDir.resolve("session.jsonl"),
+            Files.readString(sessionDir.resolve("session.jsonl")) + "\n손상된줄");
+
+        var history = storage.getHistory();
+
+        assertThat(history).hasSize(2);
     }
 }
