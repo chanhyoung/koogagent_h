@@ -16,6 +16,12 @@ public class BashTool implements ToolSet {
     private static final int TIMEOUT_SECONDS = 120;
     private static final int MAX_OUTPUT_LINES = 10_000;
 
+    private final String bashPath;
+
+    public BashTool(String bashPath) {
+        this.bashPath = bashPath;
+    }
+
     private static final String[] DANGEROUS_PATTERNS = {
         "rm\\s+-[^\\s]*r",
         "rm\\s+--recursive",
@@ -45,7 +51,7 @@ public class BashTool implements ToolSet {
         }
 
         try {
-            ProcessBuilder builder = new ProcessBuilder("bash", "-c", command);
+            ProcessBuilder builder = new ProcessBuilder(bashPath, "-c", command);
             builder.directory(new File(System.getProperty("user.dir")));
             builder.redirectErrorStream(true);
 

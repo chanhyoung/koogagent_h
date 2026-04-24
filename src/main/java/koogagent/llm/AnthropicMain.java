@@ -60,7 +60,7 @@ public class AnthropicMain {
 
         log.info("Koog Agent initialized with Anthropic Claude Opus_4_6");
 
-        System.out.println("User: ");
+        System.out.print("User: ");
 
         // 사용자에게서 직접입력을 받아서 프롬프트로 사용
         String userPrompt = System.console().readLine();

@@ -27,10 +27,11 @@ public class KoogAgentMain {
             throw new IllegalStateException("ANTHROPIC_API_KEY가 설정되지 않았습니다. .env 파일을 확인하세요.");
         }
         boolean isSslTrustStore = dotenv.get("IS_SSL_TRUSTSTORE", "false").equalsIgnoreCase("true");
+        String bashPath = dotenv.get("BASH_PATH", "bash");
 
         AnthropicLLMClient client = buildClient(apiKey, isSslTrustStore, dotenv);
 
-        try (CodingAgent agent = new CodingAgent(client)) {
+        try (CodingAgent agent = new CodingAgent(client, bashPath)) {
             System.out.println("Coding Agent가 시작되었습니다. 종료하려면 'exit'을 입력하세요.");
             System.out.println();
 
