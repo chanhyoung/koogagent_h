@@ -2,6 +2,7 @@ package koogagent.tools;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -30,7 +31,7 @@ public class ReadFileTool implements ToolSet {
       if (!file.canRead()) return "오류: 읽기 권한이 없습니다: " + filePath;
       
       Path path = Paths.get(filePath);
-      return Files.readString(path);      
+      return Files.readString(path, StandardCharsets.UTF_8);
     } catch (IOException e) {
       e.printStackTrace();
       return "오류: 파일을 읽을 수 없습니다: " + e.getMessage();

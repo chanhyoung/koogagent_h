@@ -17,6 +17,7 @@ import kotlinx.serialization.json.Json;
 import kotlinx.serialization.json.JsonKt;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
@@ -63,12 +64,12 @@ public class JsonlConversationHistoryStorage implements ConversationHistoryStora
         String userLine = buildLine("user", json.encodeToString(USER_SERIALIZER, user));
         String assistantLine = buildLine("assistant", json.encodeToString(ASSISTANT_SERIALIZER, assistant));
 
-        String existing = Files.exists(historyFile) ? Files.readString(historyFile) : "";
+        String existing = Files.exists(historyFile) ? Files.readString(historyFile, StandardCharsets.UTF_8) : "";
         String newContent = existing.isEmpty()
             ? userLine + "\n" + assistantLine
             : existing + "\n" + userLine + "\n" + assistantLine;
 
-        Files.writeString(historyFile, newContent);
+        Files.writeString(historyFile, newContent, StandardCharsets.UTF_8);
         if (cachedMessageCount >= 0) cachedMessageCount += 2;
     }
 
@@ -82,7 +83,7 @@ public class JsonlConversationHistoryStorage implements ConversationHistoryStora
     @Override
     public String getSummary() throws IOException {
         try {
-            String content = Files.readString(summaryFile).strip();
+            String content = Files.readString(summaryFile, StandardCharsets.UTF_8).strip();
             return content.isBlank() ? null : content;
         } catch (NoSuchFileException e) {
             return null;
@@ -106,7 +107,12 @@ public class JsonlConversationHistoryStorage implements ConversationHistoryStora
         MessageFormatter.appendMessages(conversationText, toSummarize);
 
         String summary = callSummarizeLLM(conversationText.toString(), executor, model);
-        Files.writeString(summaryFile, summary);
+        Files.writeString(summaryFile, summary, StandardCharsets.UTF_8);
+
+        List<String> rawLines = Files.readAllLines(historyFile, StandardCharsets.UTF_8)
+            .stream().filter(l -> !l.isBlank()).toList();
+        String trimmed = String.join("\n", rawLines.subList(rawLines.size() - KEEP_RECENT, rawLines.size()));
+        Files.writeString(historyFile, trimmed, StandardCharsets.UTF_8);
         cachedMessageCount = KEEP_RECENT;
     }
 
@@ -115,7 +121,7 @@ public class JsonlConversationHistoryStorage implements ConversationHistoryStora
             if (!Files.exists(historyFile)) {
                 cachedMessageCount = 0;
             } else {
-                try (var lines = Files.lines(historyFile)) {
+                try (var lines = Files.lines(historyFile, StandardCharsets.UTF_8)) {
                     cachedMessageCount = (int) lines.filter(l -> !l.isBlank()).count();
                 }
             }
@@ -129,7 +135,7 @@ public class JsonlConversationHistoryStorage implements ConversationHistoryStora
             .llmModel(model)
             .systemPrompt(conversationText)
             .toolRegistry(ToolRegistry.builder().build())
-            .maxIterations(1)
+            .maxIterations(3)
             .build();
         return agent.run("이 대화를 간결하게 요약해주세요. 핵심 정보만 간결하게 작성하세요.");
     }
@@ -138,7 +144,7 @@ public class JsonlConversationHistoryStorage implements ConversationHistoryStora
         if (!Files.exists(historyFile)) return List.of();
 
         List<Message> messages = new ArrayList<>();
-        for (String line : Files.readAllLines(historyFile)) {
+        for (String line : Files.readAllLines(historyFile, StandardCharsets.UTF_8)) {
             if (line.isBlank()) continue;
             try {
                 JsonNode node = mapper.readTree(line);

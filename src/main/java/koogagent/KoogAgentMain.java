@@ -4,6 +4,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
 import java.security.KeyStore;
 import java.util.Scanner;
 
@@ -47,7 +48,7 @@ public class KoogAgentMain {
             out.println("명령어: /clear (새 대화 시작), exit (종료)");
             out.println();
 
-            Scanner scanner = new Scanner(in);
+            Scanner scanner = new Scanner(in, StandardCharsets.UTF_8);
             while (true) {
                 out.print("User: ");
                 if (!scanner.hasNextLine()) break;

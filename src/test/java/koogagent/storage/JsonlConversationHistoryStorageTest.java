@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -39,7 +40,7 @@ class JsonlConversationHistoryStorageTest {
 
         Path historyFile = sessionDir.resolve("session.jsonl");
         assertThat(Files.exists(historyFile)).isTrue();
-        var lines = Files.readAllLines(historyFile).stream()
+        var lines = Files.readAllLines(historyFile, StandardCharsets.UTF_8).stream()
             .filter(l -> !l.isBlank()).toList();
         assertThat(lines).hasSize(2);
         assertThat(lines.get(0)).contains("\"type\":\"user\"");
@@ -55,7 +56,7 @@ class JsonlConversationHistoryStorageTest {
         storage.addConversation("두 번째", "응답2");
 
         Path historyFile = sessionDir.resolve("session.jsonl");
-        var lines = Files.readAllLines(historyFile).stream()
+        var lines = Files.readAllLines(historyFile, StandardCharsets.UTF_8).stream()
             .filter(l -> !l.isBlank()).toList();
         assertThat(lines).hasSize(4);
     }
@@ -74,7 +75,8 @@ class JsonlConversationHistoryStorageTest {
         var storage = new JsonlConversationHistoryStorage(sessionDir);
         storage.addConversation("정상", "메시지");
         Files.writeString(sessionDir.resolve("session.jsonl"),
-            Files.readString(sessionDir.resolve("session.jsonl")) + "\n손상된줄");
+            Files.readString(sessionDir.resolve("session.jsonl"), StandardCharsets.UTF_8) + "\n손상된줄",
+            StandardCharsets.UTF_8);
 
         var history = storage.getHistory();
 
@@ -141,7 +143,7 @@ class JsonlConversationHistoryStorageTest {
     void getSummary_returnsNullWhenBlank() throws IOException {
         Path sessionDir = tempDir.resolve("blank-summary");
         var storage = new JsonlConversationHistoryStorage(sessionDir);
-        Files.writeString(sessionDir.resolve("summary.md"), "   ");
+        Files.writeString(sessionDir.resolve("summary.md"), "   ", StandardCharsets.UTF_8);
 
         assertThat(storage.getSummary()).isNull();
     }
@@ -150,7 +152,7 @@ class JsonlConversationHistoryStorageTest {
     void getSummary_returnsContentWhenExists() throws IOException {
         Path sessionDir = tempDir.resolve("has-summary");
         var storage = new JsonlConversationHistoryStorage(sessionDir);
-        Files.writeString(sessionDir.resolve("summary.md"), "이전 대화 요약입니다.");
+        Files.writeString(sessionDir.resolve("summary.md"), "이전 대화 요약입니다.", StandardCharsets.UTF_8);
 
         assertThat(storage.getSummary()).isEqualTo("이전 대화 요약입니다.");
     }
@@ -181,7 +183,7 @@ class JsonlConversationHistoryStorageTest {
         storage.compressHistory(null, null);
 
         assertThat(Files.exists(sessionDir.resolve("summary.md"))).isTrue();
-        assertThat(Files.readString(sessionDir.resolve("summary.md"))).isEqualTo("테스트 요약 결과");
+        assertThat(Files.readString(sessionDir.resolve("summary.md"), StandardCharsets.UTF_8)).isEqualTo("테스트 요약 결과");
     }
 
     @Test
@@ -195,7 +197,7 @@ class JsonlConversationHistoryStorageTest {
                 return "새 요약";
             }
         };
-        Files.writeString(sessionDir.resolve("summary.md"), "이전 요약");
+        Files.writeString(sessionDir.resolve("summary.md"), "이전 요약", StandardCharsets.UTF_8);
         for (int i = 0; i < 6; i++) {
             storage.addConversation("q" + i, "a" + i);
         }
