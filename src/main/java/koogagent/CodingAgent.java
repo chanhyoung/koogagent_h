@@ -2,6 +2,8 @@ package koogagent;
 
 import ai.koog.agents.core.agent.AIAgent;
 import ai.koog.agents.core.tools.ToolRegistry;
+import ai.koog.agents.features.eventHandler.feature.EventHandler;
+import ai.koog.agents.features.eventHandler.feature.EventHandlerConfig;
 import ai.koog.prompt.executor.clients.anthropic.AnthropicLLMClient;
 import ai.koog.prompt.executor.clients.anthropic.AnthropicModels;
 import ai.koog.prompt.executor.llms.MultiLLMPromptExecutor;
@@ -70,6 +72,14 @@ public class CodingAgent implements AutoCloseable {
             .temperature(0.3)
             .toolRegistry(toolRegistry)
             .maxIterations(MAX_ITERATIONS)
+            .install(EventHandler.Feature, (EventHandlerConfig config) -> {
+                config.onToolCallStarting(ctx ->
+                    System.out.println("도구 호출중: " + ctx.getToolName() + "(" + ctx.getToolArgs() + ")"));
+                config.onToolCallCompleted(ctx ->
+                    System.out.println("도구 완료: " + ctx.getToolName() + "(" + ctx.getToolResult() + ")"));
+                config.onToolCallFailed(ctx ->
+                    System.out.println("도구 호출 실패: " + ctx.getToolName() + "(" + ctx.getToolArgs() + ")"));
+            })            
             .build();
 
         String response = agent.run(userMessage);
