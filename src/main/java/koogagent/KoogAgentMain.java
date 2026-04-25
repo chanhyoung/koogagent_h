@@ -45,7 +45,7 @@ public class KoogAgentMain {
         CodingAgent agent = factory.create();
         try {
             out.println("Coding Agent가 시작되었습니다.");
-            out.println("명령어: /clear (새 대화 시작), exit (종료)");
+            out.println("명령어: /clear (새 대화 시작), /memory add <내용> (정보 저장), exit (종료)");
             out.println();
 
             Scanner scanner = new Scanner(in, StandardCharsets.UTF_8);
@@ -65,6 +65,14 @@ public class KoogAgentMain {
                     agent.close();
                     agent = factory.create();
                     out.println("새로운 대화가 시작되었습니다.");
+                    out.println();
+                    continue;
+                }
+
+                if (input.startsWith("/memory add ")) {
+                    String content = input.substring("/memory add ".length()).trim();
+                    agent.agentMemoryStorage.addMemory(content);
+                    out.println("메모리에 저장했습니다: " + content);
                     out.println();
                     continue;
                 }

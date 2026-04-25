@@ -7,8 +7,10 @@ import ai.koog.prompt.executor.clients.anthropic.AnthropicModels;
 import ai.koog.prompt.executor.llms.MultiLLMPromptExecutor;
 import ai.koog.prompt.llm.LLModel;
 import ai.koog.prompt.message.Message;
+import koogagent.storage.AgentMemoryStorage;
 import koogagent.storage.ConversationHistoryStorage;
 import koogagent.storage.JsonlConversationHistoryStorage;
+import koogagent.storage.KodingMemoryStorage;
 import koogagent.tools.BashTool;
 import koogagent.tools.CodeSearchTool;
 import koogagent.tools.EditFileTool;
@@ -32,6 +34,7 @@ public class CodingAgent implements AutoCloseable {
     private final MultiLLMPromptExecutor executor;
     private final ToolRegistry toolRegistry;
     private final ConversationHistoryStorage conversationHistoryStorage;
+    final AgentMemoryStorage agentMemoryStorage;
 
     public CodingAgent(AnthropicLLMClient client, String bashPath) throws IOException {
         this(client, bashPath, "default", UUID.randomUUID().toString());
@@ -49,6 +52,7 @@ public class CodingAgent implements AutoCloseable {
         this.conversationHistoryStorage = new JsonlConversationHistoryStorage(
             Path.of(".koogagent/projects/" + projectDir + "/" + sessionId)
         );
+        this.agentMemoryStorage = new KodingMemoryStorage();
     }
 
     public String chat(String userMessage) throws Exception {
@@ -56,7 +60,8 @@ public class CodingAgent implements AutoCloseable {
 
         List<Message> history = conversationHistoryStorage.getHistory();
         String summary = conversationHistoryStorage.getSummary();
-        String system = buildSystemPromptWithHistory(history, summary);
+        String memory = agentMemoryStorage.getMemory();
+        String system = buildSystemPromptWithHistory(history, summary, memory);
 
         AIAgent<String, String> agent = AIAgent.builder()
             .promptExecutor(executor)
@@ -72,11 +77,17 @@ public class CodingAgent implements AutoCloseable {
         return response;
     }
 
-    static String buildSystemPromptWithHistory(List<Message> history, String summary) {
-        if (summary == null && history.isEmpty()) return SYSTEM_PROMPT;
+    static String buildSystemPromptWithHistory(List<Message> history, String summary, String memory) {
+        if (summary == null && history.isEmpty() && memory == null) return SYSTEM_PROMPT;
 
         StringBuilder sb = new StringBuilder();
-        sb.append(SYSTEM_PROMPT);
+        sb.append("# System Prompt\n").append(SYSTEM_PROMPT);
+
+        if (memory != null) {
+            sb.append("\n\n# Project Memory\n");
+            sb.append("아래는 이 프로젝트에 대해 기억해야 할 정보입니다:\n");
+            sb.append(memory);
+        }
 
         if (summary != null) {
             sb.append("\n\n# Previous Conversation Summary\n").append(summary);

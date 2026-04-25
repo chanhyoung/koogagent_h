@@ -2,6 +2,7 @@ package koogagent;
 
 import ai.koog.prompt.executor.clients.anthropic.AnthropicLLMClient;
 import koogagent.storage.JsonlConversationHistoryStorage;
+import koogagent.storage.KodingMemoryStorage;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
@@ -79,6 +80,48 @@ class KoogAgentMainTest {
         assertThat(outBuffer.toString(StandardCharsets.UTF_8)).contains("/clear");
 
         deleteRecursively(Path.of(".koogagent/projects/startup-test"));
+    }
+
+    @Test
+    void memoryAdd_savesToKodingMd() throws Exception {
+        AnthropicLLMClient mockClient = Mockito.mock(AnthropicLLMClient.class);
+        Path kodingMd = Path.of("KODING.md");
+        Files.deleteIfExists(kodingMd);
+
+        InputStream in = new ByteArrayInputStream("/memory add Java + Maven 기반\nexit\n".getBytes(StandardCharsets.UTF_8));
+        ByteArrayOutputStream outBuffer = new ByteArrayOutputStream();
+        PrintStream out = new PrintStream(outBuffer, true, StandardCharsets.UTF_8);
+
+        KoogAgentMain.runLoop(in, out, () ->
+            new CodingAgent(mockClient, "bash", "memory-test", UUID.randomUUID().toString())
+        );
+
+        assertThat(outBuffer.toString(StandardCharsets.UTF_8)).contains("메모리에 저장했습니다: Java + Maven 기반");
+        assertThat(new KodingMemoryStorage().getMemory()).contains("Java + Maven 기반");
+
+        Files.deleteIfExists(kodingMd);
+        deleteRecursively(Path.of(".koogagent/projects/memory-test"));
+    }
+
+    @Test
+    void memoryAdd_persistsAfterClear() throws Exception {
+        AnthropicLLMClient mockClient = Mockito.mock(AnthropicLLMClient.class);
+        Path kodingMd = Path.of("KODING.md");
+        Files.deleteIfExists(kodingMd);
+
+        InputStream in = new ByteArrayInputStream(
+            "/memory add 테스트 항목\n/clear\nexit\n".getBytes(StandardCharsets.UTF_8));
+        ByteArrayOutputStream outBuffer = new ByteArrayOutputStream();
+        PrintStream out = new PrintStream(outBuffer, true, StandardCharsets.UTF_8);
+
+        KoogAgentMain.runLoop(in, out, () ->
+            new CodingAgent(mockClient, "bash", "persist-test", UUID.randomUUID().toString())
+        );
+
+        assertThat(new KodingMemoryStorage().getMemory()).contains("테스트 항목");
+
+        Files.deleteIfExists(kodingMd);
+        deleteRecursively(Path.of(".koogagent/projects/persist-test"));
     }
 
     private void deleteRecursively(Path path) throws IOException {

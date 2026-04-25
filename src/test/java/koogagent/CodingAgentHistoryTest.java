@@ -25,15 +25,15 @@ class CodingAgentHistoryTest {
     }
 
     @Test
-    void buildSystemPromptWithHistory_noHistoryNoSummary() {
-        String result = CodingAgent.buildSystemPromptWithHistory(List.of(), null);
+    void buildSystemPromptWithHistory_noHistoryNoSummaryNoMemory() {
+        String result = CodingAgent.buildSystemPromptWithHistory(List.of(), null, null);
 
         assertThat(result).isEqualTo(CodingAgent.SYSTEM_PROMPT);
     }
 
     @Test
     void buildSystemPromptWithHistory_withSummaryOnly() {
-        String result = CodingAgent.buildSystemPromptWithHistory(List.of(), "이전 대화 요약");
+        String result = CodingAgent.buildSystemPromptWithHistory(List.of(), "이전 대화 요약", null);
 
         assertThat(result).contains("# Previous Conversation Summary");
         assertThat(result).contains("이전 대화 요약");
@@ -43,7 +43,7 @@ class CodingAgentHistoryTest {
     @Test
     void buildSystemPromptWithHistory_withHistoryOnly() {
         String result = CodingAgent.buildSystemPromptWithHistory(
-            List.of(user("질문"), assistant("답변")), null);
+            List.of(user("질문"), assistant("답변")), null, null);
 
         assertThat(result).contains("# Recent Conversation");
         assertThat(result).contains("User: 질문");
@@ -54,7 +54,7 @@ class CodingAgentHistoryTest {
     @Test
     void buildSystemPromptWithHistory_withBoth_summaryBeforeHistory() {
         String result = CodingAgent.buildSystemPromptWithHistory(
-            List.of(user("최근 질문"), assistant("최근 답변")), "요약 내용");
+            List.of(user("최근 질문"), assistant("최근 답변")), "요약 내용", null);
 
         assertThat(result).contains("# Previous Conversation Summary");
         assertThat(result).contains("요약 내용");
@@ -62,6 +62,27 @@ class CodingAgentHistoryTest {
         assertThat(result).contains("User: 최근 질문");
         assertThat(result.indexOf("# Previous Conversation Summary"))
             .isLessThan(result.indexOf("# Recent Conversation"));
+    }
+
+    @Test
+    void buildSystemPromptWithHistory_withMemoryOnly() {
+        String result = CodingAgent.buildSystemPromptWithHistory(List.of(), null, "- Java + Maven 기반");
+
+        assertThat(result).contains("# Project Memory");
+        assertThat(result).contains("- Java + Maven 기반");
+        assertThat(result).doesNotContain("# Previous Conversation Summary");
+        assertThat(result).doesNotContain("# Recent Conversation");
+    }
+
+    @Test
+    void buildSystemPromptWithHistory_withMemory_memoryBeforeSummary() {
+        String result = CodingAgent.buildSystemPromptWithHistory(
+            List.of(), "요약 내용", "- Java + Maven 기반");
+
+        assertThat(result).contains("# Project Memory");
+        assertThat(result).contains("# Previous Conversation Summary");
+        assertThat(result.indexOf("# Project Memory"))
+            .isLessThan(result.indexOf("# Previous Conversation Summary"));
     }
 
     @Test
